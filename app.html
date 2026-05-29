@@ -3096,7 +3096,8 @@ function App() {
     <Sidebar page={page} setPage={setPage} onSettings={()=>setShowSettings(true)}/>
     <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
       {/* Header — desktop: page title | mobile: logo + page title */}
-      <header className="flex-shrink-0 h-14 bg-gray-900 border-b border-gray-800 flex items-center px-4 gap-2">
+      <header className="flex-shrink-0 bg-gray-900 border-b border-gray-800 flex items-center px-4 gap-2"
+        style={{paddingTop:'calc(env(safe-area-inset-top) + 0.75rem)', paddingBottom:'0.75rem', minHeight:'calc(env(safe-area-inset-top) + 3.5rem)'}}>
         <div className="md:hidden flex-shrink-0">
           <KaizenLogo variant="icon"/>
         </div>
