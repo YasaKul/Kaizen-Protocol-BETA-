@@ -3018,10 +3018,13 @@ function BottomNav({page, setPage}) {
 
   const clientItems = [
     {id:'overview',  icon:'grid',    label:'Dashboard'},
+    {id:'journal',   icon:'book',    label:'Journal'},
     {id:'habits',    icon:'check',   label:'Gewoontes'},
     {id:'training',  icon:'dumbbell',label:'Training'},
     {id:'nutrition', icon:'fork',    label:'Voeding'},
     {id:'progress',  icon:'trend',   label:'Voortgang'},
+    {id:'pillars',   icon:'temple',  label:'Pilaren'},
+    {id:'contact',   icon:'chat',    label:'WhatsApp'},
   ]
   const coachRootItems = [
     {id:'clients',   icon:'users',   label:'Klanten'},
@@ -3039,10 +3042,10 @@ function BottomNav({page, setPage}) {
 
   return <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-gray-800"
     style={{background:'rgba(10,11,15,0.97)', backdropFilter:'blur(12px)'}}>
-    <div className="flex items-stretch">
+    <div className="flex items-stretch overflow-x-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
       {isCoach && viewClientId && (
         <button onClick={()=>{setViewClientId(null);setPage('clients')}}
-          className="flex flex-col items-center justify-center px-3 py-2 text-gray-500 active:text-white border-r border-gray-800">
+          className="flex flex-col items-center justify-center px-3 py-2 text-gray-500 active:text-white border-r border-gray-800 flex-shrink-0">
           <Icon name="chevL" size={18}/>
           <span className="text-xs mt-0.5">Terug</span>
         </button>
@@ -3050,7 +3053,8 @@ function BottomNav({page, setPage}) {
       {items.map(({id,icon,label})=>{
         const active = page===id
         return <button key={id} onClick={()=>setPage(id)}
-          className={`flex-1 flex flex-col items-center justify-center py-3 gap-0.5 transition-colors ${active?'text-blue-400':'text-gray-600 active:text-gray-300'}`}>
+          className={`flex-shrink-0 flex flex-col items-center justify-center py-3 gap-0.5 transition-colors px-4 ${active?'text-blue-400':'text-gray-600 active:text-gray-300'}`}
+          style={{minWidth: items.length > 5 ? '64px' : undefined, flex: items.length <= 5 ? '1' : undefined}}>
           <Icon name={icon} size={active?22:20} className={active?'text-blue-400':''}/>
           <span className={`text-xs font-medium ${active?'text-blue-400':''}`}>{label}</span>
           {active && <div className="w-1 h-1 rounded-full bg-blue-400 mt-0.5"/>}
