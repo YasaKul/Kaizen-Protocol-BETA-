@@ -1,4 +1,4 @@
-const CACHE = 'kaizen-v4';
+const CACHE = 'kaizen-v5';
 const SHELL = ['./app.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
