@@ -1562,11 +1562,11 @@ function Schemas() {
                   <input value={ex.note||''} onChange={e=>updateEx(day.id,ex.id,'note',e.target.value)} placeholder="Notitie (optioneel)"
                     className="w-full bg-transparent border-b border-gray-800 px-1 py-1 text-gray-500 text-xs focus:outline-none focus:border-gray-600 placeholder-gray-700 mt-1"/>
                 </div>
-                <input type="number" value={ex.sets} onChange={e=>updateEx(day.id,ex.id,'sets',e.target.value)} min={1}
+                <input type="number" onFocus={e=>e.target.select()} value={ex.sets} onChange={e=>updateEx(day.id,ex.id,'sets',e.target.value)} min={1}
                   className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"/>
                 <input value={ex.reps} onChange={e=>updateEx(day.id,ex.id,'reps',e.target.value)} placeholder="8-10"
                   className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"/>
-                <input type="number" value={ex.weight} onChange={e=>updateEx(day.id,ex.id,'weight',e.target.value)} min={0}
+                <input type="number" onFocus={e=>e.target.select()} value={ex.weight} onChange={e=>updateEx(day.id,ex.id,'weight',e.target.value)} min={0}
                   className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"/>
                 <div className="flex gap-0.5 flex-wrap">
                   {RPE_BTNS.map(r=><button key={r} onClick={()=>updateEx(day.id,ex.id,'rpe',r)}
@@ -1733,7 +1733,7 @@ function Training() {
         </div>
         <div>
           <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Duur (min)</label>
-          <input type="number" value={form.duration} onChange={e=>f('duration',Number(e.target.value))} min={1}
+          <input type="number" onFocus={e=>e.target.select()} value={form.duration} onChange={e=>f('duration',Number(e.target.value))} min={1}
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-700"/>
         </div>
         <div>
@@ -1756,11 +1756,11 @@ function Training() {
         {form.exercises.map((ex,i)=><div key={ex.id} className="grid grid-cols-12 gap-2 items-center mb-2">
           <input className="col-span-5 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-700 placeholder-gray-600"
             placeholder="Naam" value={ex.name} onChange={e=>ue(i,'name',e.target.value)}/>
-          <input type="number" className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
+          <input type="number" onFocus={e=>e.target.select()} className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
             value={ex.sets} onChange={e=>ue(i,'sets',e.target.value)} min={1}/>
-          <input type="number" className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
+          <input type="number" onFocus={e=>e.target.select()} className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
             value={ex.reps} onChange={e=>ue(i,'reps',e.target.value)} min={1}/>
-          <input type="number" className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
+          <input type="number" onFocus={e=>e.target.select()} className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
             value={ex.weight} onChange={e=>ue(i,'weight',e.target.value)} min={0}/>
           <button onClick={()=>f('exercises',form.exercises.filter((_,j)=>j!==i))} disabled={form.exercises.length===1}
             className="col-span-1 text-gray-600 hover:text-red-400 disabled:opacity-20"><Icon name="trash" size={14}/></button>
@@ -2132,7 +2132,7 @@ function Nutrition() {
             <div key={k}>
               <label className="block text-xs text-gray-400 mb-1 font-medium uppercase tracking-wider">{l}</label>
               <div className="relative">
-                <input type="number" value={goalsForm[k]} onChange={e=>gf(k,e.target.value)} min={0}
+                <input type="number" onFocus={e=>e.target.select()} value={goalsForm[k]} onChange={e=>gf(k,e.target.value)} min={0}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 pr-12 text-white text-sm focus:outline-none focus:border-blue-700"/>
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">{u}</span>
               </div>
@@ -2209,7 +2209,7 @@ function Nutrition() {
               <div key={k}>
                 <label className="block text-xs text-gray-400 mb-1">{l}</label>
                 <div className="relative">
-                  <input type="number" value={nf[k]} onChange={e=>nff(k,e.target.value)} min={0}
+                  <input type="number" onFocus={e=>e.target.select()} value={nf[k]} onChange={e=>nff(k,e.target.value)} min={0}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 pr-10 text-white text-sm focus:outline-none focus:border-blue-700"/>
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">{u}</span>
                 </div>
@@ -2221,7 +2221,7 @@ function Nutrition() {
         <div>
           <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-medium">Standaard portie</label>
           <div className="relative w-36">
-            <input type="number" value={nf.serving} onChange={e=>nff('serving',e.target.value)} min={1}
+            <input type="number" onFocus={e=>e.target.select()} value={nf.serving} onChange={e=>nff('serving',e.target.value)} min={1}
               className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 pr-12 text-white text-sm focus:outline-none focus:border-blue-700"/>
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">gram</span>
           </div>
@@ -2261,7 +2261,7 @@ function Nutrition() {
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-400">Hoeveelheid:</span>
           <button onClick={()=>setLibGrams(g=>Math.max(1,g-10))} className="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center font-bold text-lg">−</button>
-          <input type="number" value={libGrams} onChange={e=>setLibGrams(Math.max(1,Number(e.target.value)||1))} min={1}
+          <input type="number" onFocus={e=>e.target.select()} value={libGrams} onChange={e=>setLibGrams(Math.max(1,Number(e.target.value)||1))} min={1}
             className="w-20 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"/>
           <button onClick={()=>setLibGrams(g=>g+10)} className="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 text-white flex items-center justify-center font-bold text-lg">+</button>
           <span className="text-sm text-gray-400">gram</span>
@@ -2366,7 +2366,7 @@ function Nutrition() {
             <div key={k}>
               <label className="block text-xs text-gray-400 mb-1 font-medium">{l}</label>
               <div className="relative">
-                <input type="number" value={mf[k]} onChange={e=>fm(k,e.target.value)} min={0}
+                <input type="number" onFocus={e=>e.target.select()} value={mf[k]} onChange={e=>fm(k,e.target.value)} min={0}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 pr-8 text-white text-sm focus:outline-none focus:border-blue-700"/>
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">{u}</span>
               </div>
@@ -2385,7 +2385,7 @@ function Nutrition() {
         {saveToLib && <div className="flex items-center gap-3 pl-1 pt-1">
           <span className="text-xs text-gray-500">Portiegrootte (voor per-100g berekening):</span>
           <div className="flex items-center gap-1.5">
-            <input type="number" value={manualGrams} onChange={e=>setManualGrams(Math.max(1,Number(e.target.value)||1))} min={1}
+            <input type="number" onFocus={e=>e.target.select()} value={manualGrams} onChange={e=>setManualGrams(Math.max(1,Number(e.target.value)||1))} min={1}
               className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm text-center focus:outline-none focus:border-blue-700"/>
             <span className="text-xs text-gray-500">gram</span>
           </div>
@@ -2571,7 +2571,7 @@ function Progress() {
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
       <h3 className="text-sm font-semibold text-gray-200 mb-3">Gewicht Loggen</h3>
       <div className="flex gap-2">
-        <input type="number" value={weightInput} onChange={e=>setWeightInput(e.target.value)}
+        <input type="number" onFocus={e=>e.target.select()} value={weightInput} onChange={e=>setWeightInput(e.target.value)}
           placeholder="bijv. 82.5"
           className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 min-w-0"
           step="0.1" min="20" max="300"
