@@ -157,6 +157,7 @@ function AppProvider({children}) {
   const [customFoods, setCustomFoods] = useState(() => load('customFoods', []))
   const [weightLogs,   setWeightLogs]   = useState(() => load('weightLogs',   []))
   const [mealSchemas,  setMealSchemas]  = useState(() => load('mealSchemas',  []))
+  const [trainingLogs, setTrainingLogs] = useState(() => load('trainingLogs', []))
 
   useEffect(()=>save('cu',currentUser),[currentUser])
   useEffect(()=>save('users',users),[users])
@@ -172,6 +173,7 @@ function AppProvider({children}) {
   useEffect(()=>save('customFoods',customFoods),[customFoods])
   useEffect(()=>save('weightLogs',weightLogs),[weightLogs])
   useEffect(()=>save('mealSchemas',mealSchemas),[mealSchemas])
+  useEffect(()=>save('trainingLogs',trainingLogs),[trainingLogs])
 
   const activeId = viewClientId || currentUser?.id
   const activeUser = users.find(u=>u.id===activeId) || currentUser
@@ -256,6 +258,13 @@ function AppProvider({children}) {
   const getWeightLogs = (userId=activeId) => weightLogs.filter(l=>l.userId===userId).sort((a,b)=>a.date.localeCompare(b.date))
   const deleteWeightLog = id => setWeightLogs(p=>p.filter(l=>l.id!==id))
 
+  const getTrainingLog = (clientId, date) => trainingLogs.find(l=>l.clientId===clientId&&l.date===date)||null
+  const saveTrainingLog = (log) => {
+    const ex = trainingLogs.find(l=>l.clientId===log.clientId&&l.date===log.date)
+    if(ex) setTrainingLogs(p=>p.map(l=>l.clientId===log.clientId&&l.date===log.date?{...log,id:ex.id}:l))
+    else setTrainingLogs(p=>[...p,{...log,id:uid(),createdAt:new Date().toISOString()}])
+  }
+
   const getMealSchema  = (clientId=activeId) => mealSchemas.find(s=>s.clientId===clientId)||null
   const saveMealSchema = (schema) => {
     const existing = mealSchemas.find(s=>s.clientId===schema.clientId)
@@ -287,6 +296,7 @@ function AppProvider({children}) {
     getMealSchema, saveMealSchema, deleteMealSchema,
     findUserByContact, resetPassword, updateCurrentUser,
     addSchema, updateSchema, deleteSchema, assignSchema, unassignSchema, getClientSchema, getCoachSchemas,
+    getTrainingLog, saveTrainingLog,
   }}>{children}</Ctx.Provider>
 }
 
@@ -1472,8 +1482,9 @@ function Schemas() {
 
   const [mobileView, setMobileView] = useState('list') // 'list' | 'detail'
 
+  const emptyWeekSchedule = () => ({1:null,2:null,3:null,4:null,5:null,6:null,0:null})
   const startNew = () => {
-    const d = {name:'Nieuw schema',description:'',days:[emptySchemaDay()]}
+    const d = {name:'Nieuw schema',description:'',days:[emptySchemaDay()],weekSchedule:emptyWeekSchedule()}
     setDraft(d); setEditing(true); setSel(null); setTab('editor'); setMobileView('detail')
   }
   const startEdit = s => { setDraft(JSON.parse(JSON.stringify(s))); setEditing(true); setTab('editor'); setMobileView('detail') }
@@ -1621,6 +1632,24 @@ function Schemas() {
           </button>
         </div>
 
+        {/* Week Rooster */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
+          <div className="mb-1">
+            <h3 className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Week Rooster</h3>
+            <p className="text-xs text-gray-600 mt-1">Welk trainingsmoment valt op welke dag?</p>
+          </div>
+          {[[1,'Maandag'],[2,'Dinsdag'],[3,'Woensdag'],[4,'Donderdag'],[5,'Vrijdag'],[6,'Zaterdag'],[0,'Zondag']].map(([num,label])=>(
+            <div key={num} className="flex items-center gap-3">
+              <span className="text-sm text-gray-400 w-24 flex-shrink-0">{label}</span>
+              <select value={draft.weekSchedule?.[num]||''} onChange={e=>draftF('weekSchedule',{...(draft.weekSchedule||{}), [num]: e.target.value||null})}
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-700">
+                <option value="">🛌 Rust</option>
+                {(draft.days||[]).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+
         <div className="flex gap-3">
           <button onClick={saveEdit} disabled={!draft.name.trim()}
             className="bg-blue-700 hover:bg-blue-800 disabled:opacity-40 text-white font-bold px-6 py-2.5 rounded-xl text-sm">Opslaan</button>
@@ -1696,167 +1725,275 @@ function Schemas() {
   </div>
 }
 
-function Training() {
-  const {getTrainings,addTraining,deleteTraining,getClientSchema,currentUser,viewClientId} = useApp()
-  const isCoach = currentUser?.role==='coach'
-  const sessions=getTrainings()
-  // Show schema: always for clients, and for coach when viewing a specific client
-  const assignedSchema = (isCoach && !viewClientId) ? null : getClientSchema()
-  const [form,setForm] = useState(emptyT())
-  const [show,setShow] = useState(false)
-  const [expanded,setExpanded] = useState(sessions[0]?.id||null)
-  const f = (k,v) => setForm(p=>({...p,[k]:v}))
-  const ue = (i,k,v) => { const ex=[...form.exercises]; ex[i]={...ex[i],[k]:k==='name'?v:Number(v)}; f('exercises',ex) }
-  const save = () => { if(!form.title.trim()) return; addTraining(form); setForm(emptyT()); setShow(false) }
-  const TYPES=['krachttraining','cardio','mobility','sport','overig']
-  const TLABELS={krachttraining:'Krachttraining',cardio:'Cardio',mobility:'Mobility',sport:'Sport',overig:'Overig'}
-  const weekN=sessions.filter(s=>(new Date()-new Date(s.date+'T12:00:00'))/86400000<=7).length
+// ── DayWorkout ────────────────────────────────────────────────────────────────
+const DAY_NAMES_SHORT = ['Ma','Di','Wo','Do','Vr','Za','Zo']
+const DAY_NAMES_FULL  = ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag']
+// JS getDay(): 0=Sun,1=Mon...6=Sat  →  index 0-6 = Mon-Sun:  [1,2,3,4,5,6,0]
+const WEEK_KEYS = [1,2,3,4,5,6,0]
 
-  return <div className="p-6 space-y-6 max-w-4xl">
-    <div className="flex items-center justify-between">
-      <div><h1 className="text-2xl font-bold text-white">Training</h1><p className="text-gray-400 text-sm mt-1">{sessions.length} sessies gelogd</p></div>
-      <button onClick={()=>setShow(p=>!p)} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold px-4 py-2.5 rounded-xl text-sm">
-        <Icon name="plus" size={15}/> Sessie loggen
+function DayWorkout({date, schemaDay, log, activeId, isCoach, schema, onSave, onBack}) {
+  const RPE_BTNS = [1,2,3,4,5,6,7,8,9,10]
+  const initActuals = () => (schemaDay?.exercises||[]).map(ex => {
+    const existing = log?.exercises?.find(e=>e.exId===ex.id)
+    return {exId:ex.id, actualLoad:existing?.actualLoad??'', actualRpe:existing?.actualRpe??null, athleteNote:existing?.athleteNote??''}
+  })
+  const [actuals, setActuals] = useState(initActuals)
+  const [sessNotes, setSessNotes] = useState(log?.athleteNotes||'')
+  const updActual = (exId,k,v) => setActuals(p=>p.map(a=>a.exId===exId?{...a,[k]:v}:a))
+
+  const dateObj = new Date(date+'T12:00:00')
+  const dowIdx = dateObj.getDay()===0 ? 6 : dateObj.getDay()-1
+  const dayLabel = `${DAY_NAMES_FULL[dowIdx]} ${date.split('-')[2]}-${date.split('-')[1]}-${date.split('-')[0]}`
+
+  if(!schemaDay) return (
+    <div className="p-4 md:p-6 max-w-2xl">
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white mb-8">
+        <Icon name="chevL" size={14}/> Terug
       </button>
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <p className="text-5xl mb-4">🛌</p>
+        <h3 className="text-xl font-bold text-white mb-2">Rustdag</h3>
+        <p className="text-gray-500 text-sm">{dayLabel}</p>
+      </div>
     </div>
+  )
 
-    {/* Assigned schema block (client only) */}
-    {assignedSchema && <SchemaView schema={assignedSchema}/>}
-    {!assignedSchema && !isCoach && <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex items-center gap-4">
-      <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center flex-shrink-0">
-        <Icon name="schema" size={18} className="text-gray-500"/>
+  return (
+    <div className="p-4 md:p-6 space-y-4 max-w-2xl">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="text-gray-400 hover:text-white flex-shrink-0"><Icon name="chevL" size={20}/></button>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl font-bold text-white">{schemaDay.name}</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{dayLabel}</p>
+        </div>
+        {log && <span className="text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0" style={{background:'rgba(34,197,94,0.12)',color:'#22c55e'}}>✓ Gedaan</span>}
       </div>
-      <div>
-        <p className="text-sm font-semibold text-gray-300">Geen schema toegewezen</p>
-        <p className="text-xs text-gray-600 mt-0.5">Je coach heeft nog geen trainingsschema voor jou aangemaakt.</p>
-      </div>
-    </div>}
 
-    <div className="grid grid-cols-3 gap-4">
-      {[{v:weekN,l:'trainingen',s:'deze week'},{v:sessions.length,l:'sessies',s:'totaal'},{v:sessions.reduce((n,s)=>n+(s.exercises?.length||0),0),l:'oefeningen',s:'gelogd'}].map((x,i)=>
-        <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-2xl font-bold text-white">{x.v}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{x.l}<br/>{x.s}</p>
-        </div>)}
-    </div>
-
-    {show&&<div className="bg-gray-900 border border-blue-700/20 rounded-2xl p-6">
-      <h3 className="font-semibold text-white mb-5">Nieuwe sessie</h3>
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="col-span-2">
-          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Naam</label>
-          <input type="text" value={form.title} onChange={e=>f('title',e.target.value)} placeholder="Bijv. Push Day"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-blue-700"/>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Datum</label>
-          <input type="date" value={form.date} onChange={e=>f('date',e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-700"/>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Type</label>
-          <select value={form.type} onChange={e=>f('type',e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-700">
-            {TYPES.map(t=><option key={t} value={t}>{TLABELS[t]}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Duur (min)</label>
-          <input type="number" onFocus={e=>e.target.select()} value={form.duration} onChange={e=>f('duration',Number(e.target.value))} min={1}
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-700"/>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Energie</label>
-          <div className="flex gap-1">{ET.map(e=><button key={e.v} onClick={()=>f('energy',e.v)}
-            className={`flex-1 py-2 rounded-xl text-lg ${form.energy===e.v?'bg-gray-700 ring-2 ring-blue-600':'bg-gray-800 hover:bg-gray-700'}`}>{e.e}</button>)}</div>
-        </div>
-      </div>
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <label className="text-xs text-gray-400 uppercase tracking-wider font-medium">Oefeningen</label>
-          <button onClick={()=>f('exercises',[...form.exercises,emptyEx()])} className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1">
-            <Icon name="plus" size={12}/> Toevoegen
-          </button>
-        </div>
-        <div className="grid grid-cols-12 gap-2 px-2 mb-2 text-xs text-gray-600 uppercase tracking-wider font-medium">
-          <div className="col-span-5">Oefening</div><div className="col-span-2 text-center">Sets</div>
-          <div className="col-span-2 text-center">Reps</div><div className="col-span-2 text-center">KG</div>
-        </div>
-        {form.exercises.map((ex,i)=><div key={ex.id} className="grid grid-cols-12 gap-2 items-center mb-2">
-          <input className="col-span-5 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-700 placeholder-gray-600"
-            placeholder="Naam" value={ex.name} onChange={e=>ue(i,'name',e.target.value)}/>
-          <input type="number" onFocus={e=>e.target.select()} className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
-            value={ex.sets} onChange={e=>ue(i,'sets',e.target.value)} min={1}/>
-          <input type="number" onFocus={e=>e.target.select()} className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
-            value={ex.reps} onChange={e=>ue(i,'reps',e.target.value)} min={1}/>
-          <input type="number" onFocus={e=>e.target.select()} className="col-span-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-700"
-            value={ex.weight} onChange={e=>ue(i,'weight',e.target.value)} min={0}/>
-          <button onClick={()=>f('exercises',form.exercises.filter((_,j)=>j!==i))} disabled={form.exercises.length===1}
-            className="col-span-1 text-gray-600 hover:text-red-400 disabled:opacity-20"><Icon name="trash" size={14}/></button>
-        </div>)}
-      </div>
-      <div className="mb-5">
-        <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Notities</label>
-        <textarea value={form.notes} onChange={e=>f('notes',e.target.value)} rows={2} placeholder="Hoe voelde de training?"
-          className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-blue-700 resize-none"/>
-      </div>
-      <div className="flex gap-3">
-        <button onClick={save} disabled={!form.title.trim()} className="bg-blue-700 hover:bg-blue-800 disabled:opacity-40 text-white font-bold px-6 py-2.5 rounded-xl text-sm">Opslaan</button>
-        <button onClick={()=>setShow(false)} className="text-gray-400 hover:text-white px-4 py-2.5 rounded-xl text-sm hover:bg-gray-800">Annuleren</button>
-      </div>
-    </div>}
-
-    {sessions.length===0?<div className="text-center py-16"><Icon name="dumbbell" size={48} className="text-gray-700 mx-auto mb-4"/><h3 className="text-xl font-bold text-white mb-2">Geen trainingen</h3></div>:
-      sessions.map(s=>{
-        const open=expanded===s.id
-        const energy=ET.find(e=>e.v===s.energy)
-        const vol=s.exercises?.reduce((n,e)=>n+(e.sets*e.reps*(e.weight||1)),0)||0
-        return <div key={s.id} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-700/15 flex items-center justify-center flex-shrink-0">
-              <Icon name="dumbbell" size={17} className="text-blue-500"/>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-white">{s.title}</h3>
-                <span className="text-xs px-2 py-0.5 bg-gray-800 text-gray-400 rounded-full">{TLABELS[s.type]||s.type}</span>
-                {energy&&<span className="text-base">{energy.e}</span>}
-              </div>
-              <div className="flex gap-3 mt-1 text-xs text-gray-500">
-                <span>{fmtShort(s.date)}</span>
-                <span className="flex items-center gap-1"><Icon name="clock" size={11}/>{s.duration}min</span>
-                <span className="flex items-center gap-1"><Icon name="target" size={11}/>{s.exercises?.length||0} oef.</span>
-                {s.exercises?.some(e=>e.weight>0)&&<span>{vol.toLocaleString()} kg vol.</span>}
+      {/* Exercises */}
+      {(schemaDay.exercises||[]).map(ex => {
+        const actual = actuals.find(a=>a.exId===ex.id)||{}
+        return (
+          <div key={ex.id} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+            {/* Prescribed */}
+            <div className="px-5 py-4 border-b border-gray-800">
+              <p className="text-base font-bold text-white mb-2">{ex.name}</p>
+              <div className="flex flex-wrap gap-2">
+                <span className="text-xs font-semibold bg-gray-800 text-gray-300 px-2.5 py-1 rounded-lg">{ex.sets} × {ex.reps}</span>
+                {ex.weight>0 && <span className="text-xs font-semibold bg-gray-800 text-gray-300 px-2.5 py-1 rounded-lg">{ex.weight} kg</span>}
+                {ex.rpe>0 && <span className="text-xs font-bold px-2.5 py-1 rounded-lg" style={{background:`${rpeColor(ex.rpe)}20`,color:rpeColor(ex.rpe)}}>RPE {ex.rpe}</span>}
+                {ex.note && <span className="text-xs text-gray-500 italic self-center">"{ex.note}"</span>}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={()=>deleteTraining(s.id)} className="p-1.5 text-gray-600 hover:text-red-400 rounded-lg"><Icon name="trash" size={14}/></button>
-              <button onClick={()=>setExpanded(open?null:s.id)} className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-gray-800">
-                <Icon name={open?'chevU':'chevD'} size={15}/>
-              </button>
-            </div>
+
+            {/* Client: fill in actuals */}
+            {!isCoach && (
+              <div className="px-5 py-4 space-y-4">
+                <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold">Jouw prestatie</p>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1.5">Gewicht (kg)</p>
+                    <input type="number" onFocus={e=>e.target.select()} value={actual.actualLoad}
+                      onChange={e=>updActual(ex.id,'actualLoad',e.target.value)}
+                      placeholder={ex.weight>0?String(ex.weight):'0'}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm text-center focus:outline-none focus:border-blue-700"/>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1.5">Notitie</p>
+                    <input type="text" value={actual.athleteNote} onChange={e=>updActual(ex.id,'athleteNote',e.target.value)}
+                      placeholder="bijv. comfortabel"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-700 placeholder-gray-600"/>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Jouw RPE</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {RPE_BTNS.map(r=>(
+                      <button key={r} onClick={()=>updActual(ex.id,'actualRpe', actual.actualRpe===r?null:r)}
+                        className="w-8 h-8 rounded-lg text-sm font-bold transition-all"
+                        style={{background:actual.actualRpe===r?`${rpeColor(r)}30`:'transparent',color:actual.actualRpe===r?rpeColor(r):'#4b5563',border:actual.actualRpe===r?`1px solid ${rpeColor(r)}60`:'1px solid #374151'}}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Coach: see client actuals */}
+            {isCoach && log && (
+              <div className="px-5 py-3">
+                <div className="flex gap-2 flex-wrap">
+                  {actual.actualLoad!=='' && <span className="text-xs bg-gray-800 text-gray-300 px-2.5 py-1 rounded-lg">🏋️ {actual.actualLoad} kg</span>}
+                  {actual.actualRpe && <span className="text-xs font-bold px-2.5 py-1 rounded-lg" style={{background:`${rpeColor(actual.actualRpe)}20`,color:rpeColor(actual.actualRpe)}}>RPE {actual.actualRpe}</span>}
+                  {actual.athleteNote && <span className="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-lg italic">"{actual.athleteNote}"</span>}
+                  {actual.actualLoad===''&&!actual.actualRpe&&!actual.athleteNote && <span className="text-xs text-gray-700">Nog niet ingevuld</span>}
+                </div>
+              </div>
+            )}
           </div>
-          {open&&<div className="border-t border-gray-800 p-4">
-            <table className="w-full text-sm mb-3">
-              <thead><tr className="text-xs text-gray-500 uppercase tracking-wider">
-                <th className="text-left py-1 font-medium">Oefening</th>
-                <th className="text-center py-1 font-medium">Sets</th>
-                <th className="text-center py-1 font-medium">Reps</th>
-                <th className="text-center py-1 font-medium">KG</th>
-              </tr></thead>
-              <tbody>{s.exercises?.map((ex,i)=><tr key={i} className="border-t border-gray-800">
-                <td className="py-2 text-white font-medium">{ex.name||'—'}</td>
-                <td className="py-2 text-center text-gray-400">{ex.sets}</td>
-                <td className="py-2 text-center text-gray-400">{ex.reps}</td>
-                <td className="py-2 text-center text-gray-400">{ex.weight>0?`${ex.weight}kg`:'BW'}</td>
-              </tr>)}</tbody>
-            </table>
-            {s.notes&&<div className="bg-gray-800 rounded-xl p-3 text-sm text-gray-400 italic">{s.notes}</div>}
-          </div>}
-        </div>
+        )
       })}
-  </div>
+
+      {/* Sessie notitie */}
+      {!isCoach && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3">Sessie notitie</p>
+          <textarea value={sessNotes} onChange={e=>setSessNotes(e.target.value)} rows={3}
+            placeholder="Hoe voelde de training? Energie, bijzonderheden..."
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-700 resize-none placeholder-gray-600"/>
+        </div>
+      )}
+      {isCoach && log?.athleteNotes && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-2">Notitie klant</p>
+          <p className="text-sm text-gray-300 leading-relaxed">{log.athleteNotes}</p>
+        </div>
+      )}
+
+      {/* Save */}
+      {!isCoach && (
+        <button onClick={()=>onSave({clientId:activeId,date,schemaId:schema?.id,dayId:schemaDay?.id,exercises:actuals,athleteNotes:sessNotes})}
+          className="w-full bg-blue-700 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl text-sm transition-colors"
+          style={{paddingBottom:'calc(1rem + env(safe-area-inset-bottom))'}}>
+          {log ? '✓ Bijwerken' : 'Opslaan als gedaan ✓'}
+        </button>
+      )}
+    </div>
+  )
 }
+
+function Training() {
+  const {getClientSchema,currentUser,activeId,getTrainingLog,saveTrainingLog} = useApp()
+  const isCoach = currentUser?.role==='coach'
+  const schema = getClientSchema()
+
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [selectedDate, setSelectedDate] = useState(null)
+
+  const getWeekDays = (offset=0) => {
+    const today = new Date()
+    const dow = today.getDay()
+    const monday = new Date(today)
+    monday.setDate(today.getDate() - (dow===0?6:dow-1) + offset*7)
+    return Array.from({length:7},(_,i)=>{
+      const d = new Date(monday); d.setDate(monday.getDate()+i)
+      return d.toISOString().split('T')[0]
+    })
+  }
+
+  const weekDays = getWeekDays(weekOffset)
+  const today = new Date().toISOString().split('T')[0]
+
+  // If a day is selected → show day detail
+  if(selectedDate) {
+    const idx = weekDays.indexOf(selectedDate)
+    const weekdayKey = idx>=0 ? WEEK_KEYS[idx] : new Date(selectedDate+'T12:00:00').getDay()
+    const dayId = schema?.weekSchedule?.[weekdayKey]
+    const schemaDay = schema?.days?.find(d=>d.id===dayId)||null
+    const log = getTrainingLog(activeId, selectedDate)
+    return <DayWorkout date={selectedDate} schemaDay={schemaDay} log={log} activeId={activeId}
+      isCoach={isCoach} schema={schema}
+      onSave={log=>{saveTrainingLog(log);setSelectedDate(null)}}
+      onBack={()=>setSelectedDate(null)}/>
+  }
+
+  // No schema assigned
+  if(!schema) return (
+    <div className="p-6 flex flex-col items-center justify-center py-24 text-center">
+      <Icon name="dumbbell" size={48} className="text-gray-700 mb-4"/>
+      <h3 className="text-xl font-bold text-white mb-2">Geen schema toegewezen</h3>
+      <p className="text-gray-500 text-sm max-w-xs">Je coach heeft nog geen trainingsschema voor jou aangemaakt.</p>
+    </div>
+  )
+
+  const hasSchedule = schema.weekSchedule && Object.values(schema.weekSchedule).some(v=>v!==null&&v!==undefined)
+
+  return (
+    <div className="p-4 md:p-6 space-y-4 max-w-2xl">
+      {/* Schema header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">{schema.name}</h1>
+        {schema.description && <p className="text-gray-400 text-sm mt-0.5">{schema.description}</p>}
+      </div>
+
+      {/* Week navigation */}
+      <div className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3">
+        <button onClick={()=>setWeekOffset(p=>p-1)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">
+          <Icon name="chevL" size={18}/>
+        </button>
+        <div className="text-center">
+          <p className="text-sm font-bold text-white">
+            {weekOffset===0?'Deze week':weekOffset===-1?'Vorige week':weekOffset===1?'Volgende week':`Week ${weekOffset>0?'+':''}${weekOffset}`}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">{weekDays[0].split('-').slice(1).reverse().join('/')} – {weekDays[6].split('-').slice(1).reverse().join('/')}</p>
+        </div>
+        <button onClick={()=>setWeekOffset(p=>p+1)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">
+          <Icon name="chevR" size={18}/>
+        </button>
+      </div>
+
+      {/* No schedule warning */}
+      {!hasSchedule && (
+        <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-4 text-center">
+          <p className="text-sm text-yellow-400 font-semibold">Geen week rooster ingesteld</p>
+          <p className="text-xs text-gray-500 mt-1">Vraag je coach om een week rooster in te stellen.</p>
+        </div>
+      )}
+
+      {/* Day cards */}
+      <div className="space-y-2">
+        {weekDays.map((date,i)=>{
+          const weekdayKey = WEEK_KEYS[i]
+          const dayId = schema.weekSchedule?.[weekdayKey]
+          const schemaDay = schema.days?.find(d=>d.id===dayId)||null
+          const log = getTrainingLog(activeId, date)
+          const isToday = date===today
+          const isPast = date<today
+
+          return (
+            <button key={date} onClick={()=>setSelectedDate(date)}
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left active:scale-[0.98]
+                ${isToday
+                  ? 'border-blue-500/50 bg-blue-500/5 shadow-lg shadow-blue-500/5'
+                  : 'border-gray-800 bg-gray-900 hover:border-gray-700 hover:bg-gray-800/50'}`}>
+
+              {/* Date column */}
+              <div className={`w-11 flex-shrink-0 text-center ${isToday?'text-blue-400':'text-gray-500'}`}>
+                <p className="text-xs font-bold uppercase tracking-wide">{DAY_NAMES_SHORT[i]}</p>
+                <p className="text-xl font-bold leading-tight">{date.split('-')[2]}</p>
+              </div>
+
+              {/* Workout info */}
+              <div className="flex-1 min-w-0">
+                {schemaDay ? (
+                  <>
+                    <p className={`text-sm font-bold ${isToday?'text-white':'text-gray-200'}`}>{schemaDay.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{schemaDay.exercises?.length||0} oefeningen</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-600 font-medium">Rust 🛌</p>
+                )}
+              </div>
+
+              {/* Status badge */}
+              <div className="flex-shrink-0">
+                {log ? (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-lg" style={{background:'rgba(34,197,94,0.12)',color:'#22c55e'}}>✓ Gedaan</span>
+                ) : isToday && schemaDay ? (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-400">Vandaag</span>
+                ) : !isPast && schemaDay ? (
+                  <Icon name="chevR" size={14} className="text-gray-700"/>
+                ) : null}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 
 // ── Voedingsdatabase (per 100g: cal/kcal, p/eiwit, c/koolhydraten, f/vet) ────
 const FOODS_DB = [
