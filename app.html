@@ -641,6 +641,7 @@ function AccountSettings({onClose}) {
   const [avatarImg,     setAvatarImg]     = useState(currentUser?.avatarImg   || '')
   const [showColorPick, setShowColorPick] = useState(false)
   const fileRef = useRef(null)
+  const [apiKeyVal, setApiKeyVal] = useState(() => localStorage.getItem('anthropicKey') || '')
 
   const handleFile = e => {
     const file = e.target.files?.[0]
@@ -667,6 +668,7 @@ function AccountSettings({onClose}) {
       updates.password = newPass
     }
     updateCurrentUser(updates)
+    localStorage.setItem('anthropicKey', apiKeyVal.trim())
     setSaved(true)
     setTimeout(()=>{ setSaved(false); onClose() }, 1200)
   }
@@ -794,6 +796,15 @@ function AccountSettings({onClose}) {
                 placeholder="Zelfde wachtwoord"
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-blue-600"/>
             </div>}
+          </div>
+
+          {/* AI API Key */}
+          <div className="border-t border-gray-800 pt-5">
+            <label className="block text-xs text-gray-400 uppercase tracking-wider mb-1.5 font-medium">Anthropic API Key</label>
+            <input type="password" value={apiKeyVal} onChange={e=>setApiKeyVal(e.target.value)}
+              placeholder="sk-ant-..."
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none focus:border-blue-600"/>
+            <p className="text-xs text-gray-600 mt-1.5">Voor AI macro-schatting via foto. Optioneel.</p>
           </div>
 
           {err   && <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-2.5">{err}</p>}
@@ -2183,6 +2194,34 @@ const compressPhoto = (file,cb) => {
   reader.readAsDataURL(file)
 }
 
+const analyzeFood = async (base64, apiKey) => {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: [
+          { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: base64.split(',')[1] } },
+          { type:'text', text:'Analyseer dit voedsel. Schat de macros voor de zichtbare portie op de foto. Antwoord ALLEEN met dit JSON formaat, niets anders: {"naam":"naam gerecht","kcal":500,"eiwit":30,"koolhydraten":40,"vet":15}' }
+        ]
+      }]
+    })
+  })
+  if(!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || `Fout ${resp.status}`) }
+  const data = await resp.json()
+  const match = data.content[0].text.match(/\{[\s\S]*\}/)
+  if(!match) throw new Error('Geen resultaat van AI')
+  return JSON.parse(match[0])
+}
+
 // ── MealPlan ─────────────────────────────────────────────────────────────────
 const UNITS = ['g','ml','tsp','el','stuks','portie','kcal']
 const emptyMeal = () => ({id:uid(), name:'', items:[], notes:''})
@@ -2443,6 +2482,29 @@ function Nutrition() {
   const openManual = () => { setShowForm(true); setShowLib(false); setMf(emptyM()); setEditId(null) }
   const [nutritionTab, setNutritionTab] = useState('dagboek')
 
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiErr, setAiErr] = useState('')
+  const aiPhotoRef = useRef(null)
+  const handleAiPhoto = e => {
+    const file = e.target.files?.[0]
+    if(!file) return
+    const key = localStorage.getItem('anthropicKey')
+    if(!key) { setAiErr('Voeg eerst een API key toe in je instellingen (⚙️).'); return }
+    setAiLoading(true); setAiErr('')
+    compressPhoto(file, async base64 => {
+      try {
+        const r = await analyzeFood(base64, key)
+        setMf({...emptyM(), name: r.naam||'AI schatting', calories: r.kcal||0, protein: r.eiwit||0, carbs: r.koolhydraten||0, fat: r.vet||0})
+        setShowForm(true); setShowLib(false); setEditId(null)
+      } catch(err) {
+        setAiErr('AI analyse mislukt: ' + err.message)
+      } finally {
+        setAiLoading(false)
+      }
+    })
+    e.target.value = ''
+  }
+
   return <div className="flex flex-col min-h-0">
     {/* Tab bar */}
     <div className="flex border-b border-gray-800 flex-shrink-0 px-4 md:px-6">
@@ -2469,8 +2531,15 @@ function Nutrition() {
           className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold px-4 py-2.5 rounded-xl text-sm">
           <Icon name="plus" size={15}/> Handmatig
         </button>
+        <input ref={aiPhotoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAiPhoto}/>
+        <button onClick={()=>aiPhotoRef.current?.click()} disabled={aiLoading}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">
+          {aiLoading ? '⏳' : '📸'} AI
+        </button>
       </div>
     </div>
+
+    {aiErr && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">{aiErr}</div>}
 
     {/* Coach: doelen instellen */}
     {isCoach && viewClientId && <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
